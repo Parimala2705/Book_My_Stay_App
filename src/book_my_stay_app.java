@@ -1,7 +1,14 @@
-// File: UseCase8BookingHistoryReport.java
+// File: UseCase9ErrorHandlingValidation.java
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+
+// Custom Exception for invalid bookings
+class InvalidBookingException extends Exception {
+    public InvalidBookingException(String message) {
+        super(message);
+    }
+}
 
 // Reservation class
 class Reservation {
@@ -35,37 +42,54 @@ class Reservation {
     }
 }
 
-// BookingHistory class
-class BookingHistory {
-    private List<Reservation> confirmedBookings = new ArrayList<>();
+// Validator class
+class BookingValidator {
+    private static final String[] VALID_ROOM_TYPES = {"Deluxe", "Suite", "Standard"};
 
-    // Add confirmed reservation to history
-    public void addReservation(Reservation reservation) {
-        confirmedBookings.add(reservation);
+    public static void validateRoomType(String roomType) throws InvalidBookingException {
+        boolean valid = false;
+        for (String type : VALID_ROOM_TYPES) {
+            if (type.equalsIgnoreCase(roomType)) {
+                valid = true;
+                break;
+            }
+        }
+        if (!valid) {
+            throw new InvalidBookingException("Invalid room type: " + roomType);
+        }
     }
 
-    // Retrieve all reservations
-    public List<Reservation> getAllReservations() {
-        return confirmedBookings;
+    public static void validateInventory(Map<String, Integer> inventory, String roomType) throws InvalidBookingException {
+        int available = inventory.getOrDefault(roomType, 0);
+        if (available <= 0) {
+            throw new InvalidBookingException("No rooms available for type: " + roomType);
+        }
     }
 }
 
-// BookingReportService class
-class BookingReportService {
-    private BookingHistory history;
+// Booking Manager
+class BookingManager {
+    private Map<String, Integer> inventory = new HashMap<>();
 
-    public BookingReportService(BookingHistory history) {
-        this.history = history;
+    public BookingManager() {
+        // Initialize inventory
+        inventory.put("Deluxe", 2);
+        inventory.put("Suite", 1);
+        inventory.put("Standard", 3);
     }
 
-    // Generate summary report
-    public void generateReport() {
-        System.out.println("=== Booking Report ===");
-        List<Reservation> reservations = history.getAllReservations();
-        System.out.println("Total Confirmed Bookings: " + reservations.size());
-        for (Reservation r : reservations) {
-            System.out.println(r);
-        }
+    public Reservation confirmBooking(String reservationId, String guestName, String roomType) throws InvalidBookingException {
+        // Validate room type
+        BookingValidator.validateRoomType(roomType);
+
+        // Validate inventory
+        BookingValidator.validateInventory(inventory, roomType);
+
+        // Deduct inventory
+        inventory.put(roomType, inventory.get(roomType) - 1);
+
+        // Create reservation
+        return new Reservation(reservationId, guestName, roomType);
     }
 }
 
@@ -74,23 +98,29 @@ public class book_my_stay_app {
     public static void main(String[] args) {
         System.out.println("=== Book My Stay App ===");
 
-        // Initialize booking history
-        BookingHistory history = new BookingHistory();
+        BookingManager manager = new BookingManager();
 
-        // Confirm some reservations
-        Reservation r1 = new Reservation("R001", "Alice", "Deluxe Room");
-        Reservation r2 = new Reservation("R002", "Bob", "Suite");
-        Reservation r3 = new Reservation("R003", "Charlie", "Standard Room");
+        try {
+            // Valid booking
+            Reservation r1 = manager.confirmBooking("R001", "Alice", "Deluxe");
+            System.out.println("Booking confirmed: " + r1);
 
-        // Add to booking history
-        history.addReservation(r1);
-        history.addReservation(r2);
-        history.addReservation(r3);
+            // Invalid room type
+            Reservation r2 = manager.confirmBooking("R002", "Bob", "Luxury");
+            System.out.println("Booking confirmed: " + r2);
 
-        // Generate report
-        BookingReportService reportService = new BookingReportService(history);
-        reportService.generateReport();
+        } catch (InvalidBookingException e) {
+            System.out.println("Booking failed: " + e.getMessage());
+        }
 
-        System.out.println("\nSystem ready for further operations...");
+        try {
+            // Exhaust inventory
+            manager.confirmBooking("R003", "Charlie", "Suite");
+            manager.confirmBooking("R004", "David", "Suite"); // should fail
+        } catch (InvalidBookingException e) {
+            System.out.println("Booking failed: " + e.getMessage());
+        }
+
+        System.out.println("\nSystem continues running safely...");
     }
 }
